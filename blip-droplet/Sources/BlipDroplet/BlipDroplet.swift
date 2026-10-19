@@ -74,7 +74,7 @@ public final class BlipDroplet: NSObject, ObservableObject, Droplet {
                         } else {
                             // Other error
                             self.dropModel.markError("Blip handoff failed: \(error)")
-                            self.host?.log.warning("Blip handoff failed: \(error)")
+                            self.host?.log.error("Blip handoff failed: \(error)")
                         }
                     }
                 }
