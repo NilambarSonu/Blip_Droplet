@@ -42,47 +42,47 @@ public final class BlipFloatingPanel: NSPanel {
         // Configure standard macOS traffic lights
         if let close = standardWindowButton(.closeButton) {
             close.target = self
-            close.action = #selector(handleClose)
+            close.action = #selector(BlipFloatingPanel.handleCloseAction)
             close.toolTip = "Close (Esc)"
         }
         if let mini = standardWindowButton(.miniaturizeButton) {
             mini.isEnabled = true
             mini.target = self
-            mini.action = #selector(handleMiniaturize)
+            mini.action = #selector(BlipFloatingPanel.handleMiniaturizeAction)
             mini.toolTip = "Hide Blip Panel"
         }
         if let zoom = standardWindowButton(.zoomButton) {
             zoom.isEnabled = true
             zoom.target = self
-            zoom.action = #selector(handleZoom)
+            zoom.action = #selector(BlipFloatingPanel.handleZoomAction)
             zoom.toolTip = "Toggle Expanded View"
         }
     }
 
-    @objc public func handleClose() {
+    @objc public func handleCloseAction() {
         onClose?()
     }
 
-    @objc public func handleMiniaturize() {
+    @objc public func handleMiniaturizeAction() {
         // Floating panels do not dock into the macOS Dock tile.
         // An honest, accessible equivalent is to hide the panel back to the notch.
         onClose?()
     }
 
-    @objc public func handleZoom() {
+    @objc public func handleZoomAction() {
         BlipPanelController.shared.toggleZoom()
     }
 
     public override func performClose(_ sender: Any?) {
-        handleClose()
+        handleCloseAction()
     }
 
     public override func miniaturize(_ sender: Any?) {
-        handleMiniaturize()
+        handleMiniaturizeAction()
     }
 
     public override func zoom(_ sender: Any?) {
-        handleZoom()
+        handleZoomAction()
     }
 
     public override var canBecomeKey: Bool {
@@ -95,7 +95,7 @@ public final class BlipFloatingPanel: NSPanel {
 
     public override func cancelOperation(_ sender: Any?) {
         // Native Escape key dismissal
-        handleClose()
+        handleCloseAction()
     }
 }
 

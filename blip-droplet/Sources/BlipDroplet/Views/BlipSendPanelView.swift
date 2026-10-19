@@ -54,7 +54,8 @@ public struct BlipSendPanelView: View {
                     .fill(Color(nsColor: .windowBackgroundColor).opacity(0.92))
                     .background(
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(.ultraDarkMaterial)
+                            .fill(.ultraThickMaterial)
+                            .environment(\.colorScheme, .dark)
                     )
 
                 // Droppy native glass surface for sheen and host theme harmony
