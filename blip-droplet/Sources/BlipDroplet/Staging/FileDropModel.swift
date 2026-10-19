@@ -224,9 +224,13 @@ public final class FileDropModel: ObservableObject {
             }
 
             // Return to MainActor to update observable state
+            let finalInfo = stagedInfo
+            let finalFailure = failureReason
+            let finalCoordError = coordError
+
             await MainActor.run {
                 guard let self = self else {
-                    if let info = stagedInfo {
+                    if let info = finalInfo {
                         storage.removeStagedFile(at: info.stagedURL)
                     }
                     return
@@ -239,16 +243,16 @@ public final class FileDropModel: ObservableObject {
 
                 // Verify the operation wasn't cancelled or superseded while in background
                 guard case .validating(let currentOpID) = self.state, currentOpID == operationID else {
-                    if let info = stagedInfo {
+                    if let info = finalInfo {
                         storage.removeStagedFile(at: info.stagedURL)
                     }
                     return
                 }
 
-                if let info = stagedInfo {
+                if let info = finalInfo {
                     self.state = .staged(info)
                 } else {
-                    let message = failureReason.isEmpty ? (coordError?.localizedDescription ?? "File validation failed.") : failureReason
+                    let message = finalFailure.isEmpty ? (finalCoordError?.localizedDescription ?? "File validation failed.") : finalFailure
                     self.state = .error(message)
                 }
             }

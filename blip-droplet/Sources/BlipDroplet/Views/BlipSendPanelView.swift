@@ -154,7 +154,7 @@ public struct BlipSendPanelView: View {
                             .font(.system(size: 12, weight: .medium))
                     }
                 }
-                .buttonStyle(DroppyQuietButtonStyle(size: .regular))
+                .buttonStyle(DroppyAccentButtonStyle(color: electricBlue, size: .medium))
                 .padding(.top, DroppySpacing.xs)
             }
             .padding(DroppySpacing.md)
