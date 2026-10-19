@@ -28,6 +28,9 @@ public final class BlipDroplet: NSObject, ObservableObject, Droplet {
         self.host = host
         host.log.info("Blip droplet activated on Droppy shelf.")
 
+        // Configure floating send panel controller
+        BlipPanelController.shared.configure(droplet: self)
+
         // Listen for staging state changes to manage shelf hold-open
         dropModel.$state
             .receive(on: DispatchQueue.main)
@@ -47,12 +50,17 @@ public final class BlipDroplet: NSObject, ObservableObject, Droplet {
 
     public func deactivate() {
         cancellables.removeAll()
+        BlipPanelController.shared.closePanel()
         _ = host?.shelf.setHoldsOpen(false)
         dropModel.cleanup()
         host = nil
     }
 
     // MARK: - Actions
+
+    public func openSendPanel() {
+        BlipPanelController.shared.openPanel()
+    }
 
     public func requestHandoff() {
         guard case .staged = dropModel.state else { return }

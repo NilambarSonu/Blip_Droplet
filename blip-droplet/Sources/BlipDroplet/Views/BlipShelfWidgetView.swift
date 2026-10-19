@@ -47,6 +47,15 @@ public struct BlipShelfWidgetView: View {
 
             Spacer(minLength: 0)
 
+            Button {
+                droplet.openSendPanel()
+            } label: {
+                Image(systemName: "arrow.up.forward.app")
+                    .font(.system(size: 9))
+            }
+            .buttonStyle(DroppyCircleButtonStyle(size: 18))
+            .help("Open Blip Send Panel")
+
             // Status Badge
             statusBadge
         }
@@ -248,6 +257,13 @@ public struct BlipShelfWidgetView: View {
                 }
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(AdaptiveColors.notchSurfaceSecondaryText)
+                .buttonStyle(DroppyQuietButtonStyle(size: .small))
+
+                Button("Open Panel") {
+                    droplet.openSendPanel()
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(AdaptiveColors.notchSurfacePrimaryText)
                 .buttonStyle(DroppyQuietButtonStyle(size: .small))
 
                 Spacer(minLength: 0)

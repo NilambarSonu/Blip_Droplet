@@ -64,6 +64,9 @@ if [ -z "$BUNDLE_PATH" ] || [ ! -d "$BUNDLE_PATH" ]; then
 fi
 echo "Produced bundle: $BUNDLE_PATH"
 
+echo "=== 3b. Running Unit & Contract Tests ==="
+swift test 2>&1 | tee "$EVIDENCE_DIR/tests.log"
+
 echo "=== 4. Post-Build Bundle Validation ==="
 bash "$SDK_DIR/Scripts/validate-droplet.sh" --bundle "$BUNDLE_PATH" --no-submission | tee "$EVIDENCE_DIR/bundle_validation.txt"
 

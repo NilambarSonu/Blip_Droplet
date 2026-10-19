@@ -48,6 +48,28 @@ public final class FileDropModel: ObservableObject {
         state = .empty
     }
 
+    /// Entry point for a file chosen from native NSOpenPanel
+    @discardableResult
+    public func handleFileChosen(url: URL) -> Bool {
+        // Duplicate selection guard: reject if already in progress or staged
+        switch state {
+        case .validating, .handoffRequested:
+            state = .error("Selection rejected: an operation is already in progress.")
+            return false
+        case .staged:
+            state = .error("A file is already staged. Clear it before choosing another.")
+            return false
+        case .empty, .handoffAcknowledged, .error:
+            break
+        }
+
+        let opID = UUID()
+        state = .validating(opID)
+
+        stageAndValidate(url: url, operationID: opID)
+        return true
+    }
+
     /// Primary drop entry point from SwiftUI .onDrop
     public func handleDrop(providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
@@ -92,121 +114,144 @@ public final class FileDropModel: ObservableObject {
         }
     }
 
-    /// Validates attributes, security scope, and writes an atomic staging copy
+    /// Validates attributes, security scope, and writes an atomic staging copy asynchronously
     private func stageAndValidate(url: URL, operationID: UUID) {
         let isSecurityScoped = url.startAccessingSecurityScopedResource()
         if isSecurityScoped {
             self.activeSecurityScopeURL = url
         }
 
-        let coordinator = NSFileCoordinator()
-        var coordError: NSError?
-        var stagedInfo: StagedFileInfo?
-        var failureReason: String = ""
+        let storage = self.storage
 
-        coordinator.coordinate(readingItemAt: url, options: .withoutChanges, error: &coordError) { accessURL in
-            let resourceValues = try? accessURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey, .isDirectoryKey, .fileSizeKey])
+        // Run coordinated I/O, copy, and stream hashing on a background thread so MainActor never stalls
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let coordinator = NSFileCoordinator()
+            var coordError: NSError?
+            var stagedInfo: StagedFileInfo?
+            var failureReason: String = ""
 
-            // Defense 1: Reject symlinks to prevent traversal vulnerabilities
-            if resourceValues?.isSymbolicLink == true {
-                failureReason = "Symlinks cannot be transferred."
-                return
-            }
+            coordinator.coordinate(readingItemAt: url, options: .withoutChanges, error: &coordError) { accessURL in
+                let resourceValues = try? accessURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey, .isDirectoryKey, .fileSizeKey])
 
-            // Defense 2: Reject folders (single file transfer contract)
-            if resourceValues?.isDirectory == true {
-                failureReason = "Folders are not supported. Drop a single regular file."
-                return
-            }
-
-            guard resourceValues?.isRegularFile == true else {
-                failureReason = "Only regular files can be staged."
-                return
-            }
-
-            // Defense 3: Upfront quota check BEFORE reading or copying
-            guard let fileSizeInt = resourceValues?.fileSize else {
-                failureReason = "Could not determine file size."
-                return
-            }
-            let byteSize = Int64(fileSizeInt)
-
-            guard byteSize > 0 else {
-                failureReason = "File is empty (0 bytes)."
-                return
-            }
-
-            guard byteSize <= self.storage.maxStagingBytes else {
-                let formattedSize = ByteCountFormatter.string(fromByteCount: byteSize, countStyle: .file)
-                let formattedMax = ByteCountFormatter.string(fromByteCount: self.storage.maxStagingBytes, countStyle: .file)
-                failureReason = "File exceeds the \(formattedMax) limit (\(formattedSize))."
-                return
-            }
-
-            // Defense 4: Check staging partition storage capacity
-            let dest: URL
-            do {
-                dest = try self.storage.createPendingStagingDestination(for: accessURL.lastPathComponent, incomingBytes: byteSize)
-            } catch {
-                failureReason = error.localizedDescription
-                return
-            }
-
-            // Defense 5: APFS Copy-on-Write clone / zero-RAM stream copy
-            do {
-                if FileManager.default.fileExists(atPath: dest.path) {
-                    try FileManager.default.removeItem(at: dest)
+                // Defense 1: Reject symlinks to prevent traversal vulnerabilities
+                if resourceValues?.isSymbolicLink == true {
+                    failureReason = "Symlinks cannot be transferred."
+                    return
                 }
-                try FileManager.default.copyItem(at: accessURL, to: dest)
-            } catch {
-                failureReason = "Failed to copy file to staging: \(error.localizedDescription)"
-                self.storage.removeStagedFile(at: dest)
-                return
+
+                // Defense 2: Reject folders (single file transfer contract)
+                if resourceValues?.isDirectory == true {
+                    failureReason = "Folders are not supported. Choose a single regular file."
+                    return
+                }
+
+                guard resourceValues?.isRegularFile == true else {
+                    failureReason = "Only regular files can be staged."
+                    return
+                }
+
+                // Defense 3: Upfront quota check BEFORE reading or copying
+                guard let fileSizeInt = resourceValues?.fileSize else {
+                    failureReason = "Could not determine file size."
+                    return
+                }
+                let byteSize = Int64(fileSizeInt)
+
+                guard byteSize > 0 else {
+                    failureReason = "File is empty (0 bytes)."
+                    return
+                }
+
+                guard byteSize <= storage.maxStagingBytes else {
+                    let formattedSize = ByteCountFormatter.string(fromByteCount: byteSize, countStyle: .file)
+                    let formattedMax = ByteCountFormatter.string(fromByteCount: storage.maxStagingBytes, countStyle: .file)
+                    failureReason = "File exceeds the \(formattedMax) limit (\(formattedSize))."
+                    return
+                }
+
+                // Defense 4: Check staging partition storage capacity
+                let dest: URL
+                do {
+                    dest = try storage.createPendingStagingDestination(for: accessURL.lastPathComponent, incomingBytes: byteSize)
+                } catch {
+                    failureReason = error.localizedDescription
+                    return
+                }
+
+                // Defense 5: Atomic copy into staging isolation partition
+                do {
+                    if FileManager.default.fileExists(atPath: dest.path) {
+                        try FileManager.default.removeItem(at: dest)
+                    }
+                    try FileManager.default.copyItem(at: accessURL, to: dest)
+                } catch {
+                    failureReason = "Failed to copy file to staging: \(error.localizedDescription)"
+                    storage.removeStagedFile(at: dest)
+                    return
+                }
+
+                // Defense 6: Stream-computed SHA-256 in 64 KB chunks (O(64 KB) RAM, never slurps into memory)
+                guard let handle = try? FileHandle(forReadingFrom: dest) else {
+                    failureReason = "Failed to open staged file for verification."
+                    storage.removeStagedFile(at: dest)
+                    return
+                }
+
+                var ctx = CC_SHA256_CTX()
+                CC_SHA256_Init(&ctx)
+
+                let chunkSize = 64 * 1024
+                while true {
+                    let chunk = handle.readData(ofLength: chunkSize)
+                    if chunk.isEmpty { break }
+                    chunk.withUnsafeBytes { rawBuffer in
+                        _ = CC_SHA256_Update(&ctx, rawBuffer.baseAddress, CC_LONG(rawBuffer.count))
+                    }
+                }
+                try? handle.close()
+
+                var digest = [UInt8](repeating: 0, count: 32)
+                CC_SHA256_Final(&digest, &ctx)
+                let sha256Hex = digest.map { String(format: "%02x", $0) }.joined()
+
+                stagedInfo = StagedFileInfo(
+                    id: operationID,
+                    originalName: accessURL.lastPathComponent,
+                    stagedURL: dest,
+                    byteSize: byteSize,
+                    sha256Hex: sha256Hex
+                )
             }
 
-            // Defense 6: Stream-computed SHA-256 in 64 KB chunks (O(64 KB) RAM, never slurps into memory)
-            guard let handle = try? FileHandle(forReadingFrom: dest) else {
-                failureReason = "Failed to open staged file for verification."
-                self.storage.removeStagedFile(at: dest)
-                return
-            }
+            // Return to MainActor to update observable state
+            await MainActor.run {
+                guard let self = self else {
+                    if let info = stagedInfo {
+                        storage.removeStagedFile(at: info.stagedURL)
+                    }
+                    return
+                }
 
-            var ctx = CC_SHA256_CTX()
-            CC_SHA256_Init(&ctx)
+                if isSecurityScoped {
+                    url.stopAccessingSecurityScopedResource()
+                    self.activeSecurityScopeURL = nil
+                }
 
-            let chunkSize = 64 * 1024
-            while true {
-                let chunk = handle.readData(ofLength: chunkSize)
-                if chunk.isEmpty { break }
-                chunk.withUnsafeBytes { rawBuffer in
-                    _ = CC_SHA256_Update(&ctx, rawBuffer.baseAddress, CC_LONG(rawBuffer.count))
+                // Verify the operation wasn't cancelled or superseded while in background
+                guard case .validating(let currentOpID) = self.state, currentOpID == operationID else {
+                    if let info = stagedInfo {
+                        storage.removeStagedFile(at: info.stagedURL)
+                    }
+                    return
+                }
+
+                if let info = stagedInfo {
+                    self.state = .staged(info)
+                } else {
+                    let message = failureReason.isEmpty ? (coordError?.localizedDescription ?? "File validation failed.") : failureReason
+                    self.state = .error(message)
                 }
             }
-            try? handle.close()
-
-            var digest = [UInt8](repeating: 0, count: 32)
-            CC_SHA256_Final(&digest, &ctx)
-            let sha256Hex = digest.map { String(format: "%02x", $0) }.joined()
-
-            stagedInfo = StagedFileInfo(
-                id: operationID,
-                originalName: accessURL.lastPathComponent,
-                stagedURL: dest,
-                byteSize: byteSize,
-                sha256Hex: sha256Hex
-            )
-        }
-
-        if isSecurityScoped {
-            url.stopAccessingSecurityScopedResource()
-            self.activeSecurityScopeURL = nil
-        }
-
-        if let info = stagedInfo {
-            self.state = .staged(info)
-        } else {
-            let message = failureReason.isEmpty ? (coordError?.localizedDescription ?? "File validation failed.") : failureReason
-            self.state = .error(message)
         }
     }
 

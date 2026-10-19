@@ -49,32 +49,50 @@ public struct DroppyFileDropTarget: View {
     }
 
     private var compactContent: some View {
-        HStack(spacing: DroppySpacing.sm) {
-            Image(systemName: "arrow.down.doc.fill")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(model.isTargeted ? electricBlue : AdaptiveColors.notchSurfaceSecondaryText)
+        Button {
+            BlipPanelController.shared.openPanel()
+        } label: {
+            HStack(spacing: DroppySpacing.sm) {
+                Image(systemName: "paperplane.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(model.isTargeted ? electricBlue : AdaptiveColors.notchSurfaceSecondaryText)
 
-            Text(model.isTargeted ? "Release file" : "Drop file to Blip")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(model.isTargeted ? electricBlue : AdaptiveColors.notchSurfaceSecondaryText)
+                Text(model.isTargeted ? "Release to stage" : "Open Blip Send Panel")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(model.isTargeted ? electricBlue : AdaptiveColors.notchSurfaceSecondaryText)
+            }
         }
+        .buttonStyle(.plain)
         .padding(.horizontal, DroppySpacing.md)
     }
 
     private var fullContent: some View {
         VStack(spacing: DroppySpacing.xsm) {
-            Image(systemName: model.isTargeted ? "arrow.down.circle.fill" : "arrow.down.doc")
+            Image(systemName: model.isTargeted ? "arrow.down.circle.fill" : "paperplane.circle.fill")
                 .font(.system(size: 24, weight: .medium))
                 .foregroundColor(model.isTargeted ? electricBlue : AdaptiveColors.notchSurfaceSecondaryText)
                 .scaleEffect(model.isTargeted ? 1.08 : 1.0)
 
-            Text(model.isTargeted ? "Drop to stage locally" : "Drag file here to stage")
-                .font(.system(size: 13, weight: .medium))
+            Text(model.isTargeted ? "Drop to stage locally" : "Send File to Android")
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(AdaptiveColors.notchSurfacePrimaryText)
 
-            Text("Coordinates single file handoff to official Blip")
+            Text("Drop file here or open the floating panel")
                 .font(.system(size: 10))
                 .foregroundColor(AdaptiveColors.notchSurfaceTertiaryText)
+
+            Button {
+                BlipPanelController.shared.openPanel()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up.forward.app")
+                        .font(.system(size: 9))
+                    Text("Open Send Panel")
+                        .font(.system(size: 11, weight: .medium))
+                }
+            }
+            .buttonStyle(DroppyQuietButtonStyle(size: .small))
+            .padding(.top, 2)
         }
         .padding(DroppySpacing.md)
     }

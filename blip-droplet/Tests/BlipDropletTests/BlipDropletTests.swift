@@ -188,4 +188,145 @@ final class BlipDropletTests: XCTestCase {
         XCTAssertEqual(desc.layoutTraits.preferredPairedWidth, 210)
         XCTAssertEqual(desc.layoutTraits.contentHeight, .fixed(150))
     }
+
+    // 9. Native File Picker Staging
+    func testNativeFilePickerStaging() throws {
+        let fixtureURL = tempDirectory.appendingPathComponent("picker_doc.pdf")
+        let fixtureData = "Phase 3D Native File Picker Staged Data".data(using: .utf8)!
+        try fixtureData.write(to: fixtureURL)
+
+        let accepted = dropModel.handleFileChosen(url: fixtureURL)
+        XCTAssertTrue(accepted, "handleFileChosen should accept valid regular file URL")
+
+        let staged = wait(timeout: 3.0) {
+            if case .staged(let info) = self.dropModel.state {
+                return info.originalName == "picker_doc.pdf" && info.byteSize == Int64(fixtureData.count)
+            }
+            return false
+        }
+        XCTAssertTrue(staged, "Model failed to stage file chosen from picker")
+
+        if case .staged(let info) = dropModel.state {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: info.stagedURL.path))
+            XCTAssertFalse(info.sha256Hex.isEmpty)
+        }
+    }
+
+    // 10. File Picker and Drag-and-Drop Staging Parity
+    func testFilePickerAndDropValidationParity() throws {
+        let fixtureURL = tempDirectory.appendingPathComponent("parity_doc.bin")
+        let testBytes: [UInt8] = (0..<1024).map { UInt8($0 % 256) }
+        let fixtureData = Data(testBytes)
+        try fixtureData.write(to: fixtureURL)
+
+        // Stage via drop
+        let provider = NSItemProvider(contentsOf: fixtureURL)!
+        XCTAssertTrue(dropModel.handleDrop(providers: [provider]))
+        XCTAssertTrue(wait(timeout: 3.0) {
+            if case .staged = self.dropModel.state { return true }
+            return false
+        })
+
+        var dropSHA = ""
+        var dropSize: Int64 = 0
+        if case .staged(let info) = dropModel.state {
+            dropSHA = info.sha256Hex
+            dropSize = info.byteSize
+        }
+        dropModel.clearStaging()
+        XCTAssertEqual(dropModel.state, .empty)
+
+        // Stage via file picker
+        XCTAssertTrue(dropModel.handleFileChosen(url: fixtureURL))
+        XCTAssertTrue(wait(timeout: 3.0) {
+            if case .staged = self.dropModel.state { return true }
+            return false
+        })
+
+        var pickerSHA = ""
+        var pickerSize: Int64 = 0
+        if case .staged(let info) = dropModel.state {
+            pickerSHA = info.sha256Hex
+            pickerSize = info.byteSize
+        }
+
+        XCTAssertEqual(dropSHA, pickerSHA, "Both input methods must compute identical SHA-256")
+        XCTAssertEqual(dropSize, pickerSize, "Both input methods must report identical byte size")
+    }
+
+    // 11. File Picker Rejection on Duplicate File
+    func testFilePickerDuplicateRejection() throws {
+        let fixtureURL = tempDirectory.appendingPathComponent("first.txt")
+        try "first file".write(to: fixtureURL, atomically: true, encoding: .utf8)
+        XCTAssertTrue(dropModel.handleFileChosen(url: fixtureURL))
+
+        XCTAssertTrue(wait(timeout: 3.0) {
+            if case .staged = self.dropModel.state { return true }
+            return false
+        })
+
+        let secondURL = tempDirectory.appendingPathComponent("second.txt")
+        try "second file".write(to: secondURL, atomically: true, encoding: .utf8)
+        let secondAccepted = dropModel.handleFileChosen(url: secondURL)
+        XCTAssertFalse(secondAccepted)
+
+        if case .error(let msg) = dropModel.state {
+            XCTAssertTrue(msg.contains("already staged"))
+        } else {
+            XCTFail("Expected .error state on duplicate choose")
+        }
+    }
+
+    // 12. File Picker Symlink and Directory Rejections
+    func testFilePickerSymlinkAndDirectoryRejections() throws {
+        let realFile = tempDirectory.appendingPathComponent("target_file.txt")
+        try "data".write(to: realFile, atomically: true, encoding: .utf8)
+        let linkFile = tempDirectory.appendingPathComponent("symlink_file.txt")
+        try FileManager.default.createSymbolicLink(at: linkFile, withDestinationURL: realFile)
+
+        XCTAssertTrue(dropModel.handleFileChosen(url: linkFile))
+        XCTAssertTrue(wait(timeout: 3.0) {
+            if case .error(let msg) = self.dropModel.state {
+                return msg.contains("Symlinks cannot be transferred")
+            }
+            return false
+        })
+
+        dropModel.clearStaging()
+
+        let folder = tempDirectory.appendingPathComponent("test_folder")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        XCTAssertTrue(dropModel.handleFileChosen(url: folder))
+        XCTAssertTrue(wait(timeout: 3.0) {
+            if case .error(let msg) = self.dropModel.state {
+                return msg.contains("Folders are not supported")
+            }
+            return false
+        })
+    }
+
+    // 13. Panel Controller Initial State
+    func testPanelControllerInitialState() {
+        let controller = BlipPanelController.shared
+        XCTAssertFalse(controller.isOpen)
+        XCTAssertFalse(controller.isPickerPresented)
+    }
+
+    // 14. Floating Panel Class Traits
+    func testFloatingPanelClassTraits() {
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 320))
+        var closed = false
+        let panel = BlipFloatingPanel(contentView: view) {
+            closed = true
+        }
+
+        XCTAssertTrue(panel.canBecomeKey, "Floating panel must be able to become key for keyboard focus")
+        XCTAssertTrue(panel.canBecomeMain, "Floating panel must be able to become main")
+        XCTAssertEqual(panel.level, .floating, "Floating panel must be at .floating level")
+        XCTAssertTrue(panel.isFloatingPanel)
+
+        // Test Escape key dismissal simulation
+        panel.cancelOperation(nil)
+        XCTAssertTrue(closed, "cancelOperation must invoke onClose handler")
+    }
 }
