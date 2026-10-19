@@ -1,0 +1,39 @@
+{
+  "id": "blip",
+  "name": "Blip",
+  "version": "1.0.0",
+  "summary": "Stage and hand off files to official Blip",
+  "description": "Blip brings native file staging to Droppy's shelf. Drop any local regular file to inspect metadata and SHA-256 before handing off to official Blip for Android delivery.",
+  "category": "Files",
+  "kit": {
+    "abi": 1,
+    "minAPI": "1.20.1"
+  },
+  "minAppVersion": "16.0.1",
+  "capabilities": [
+    "shelf-read",
+    "shelf-write"
+  ],
+  "surfaces": [
+    "shelf-widget"
+  ],
+  "icon": "Blip.icon",
+  "creator": {
+    "name": "Nilambar Behera",
+    "kind": "community",
+    "url": "https://github.com/NilambarSonu/Blip_Droplet",
+    "avatar": "creator.png"
+  },
+  "source": {
+    "repository": "https://github.com/NilambarSonu/Blip_Droplet",
+    "license": "MIT"
+  },
+  "keywords": [
+    "blip",
+    "transfer",
+    "android",
+    "file",
+    "shelf",
+    "drop"
+  ]
+}

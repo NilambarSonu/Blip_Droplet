@@ -1,0 +1,19 @@
+# Xcode & SwiftPM
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+
+# Operating System
+.DS_Store
+*.swp
+*~
+
+# CI & build outputs
+cloud-build/dist/
+cloud-build/evidence/
+.sdk/
+
+# Local caches
+*.xcuserstate
