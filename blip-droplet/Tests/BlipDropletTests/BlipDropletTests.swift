@@ -335,9 +335,10 @@ final class BlipDropletTests: XCTestCase {
         let controller = BlipPanelController.shared
         XCTAssertFalse(controller.isOpen)
         XCTAssertFalse(controller.isPickerPresented)
+        XCTAssertFalse(controller.isZoomed)
     }
 
-    // 14. Floating Panel Class Traits
+    // 14. Floating Panel Class Traits and Traffic Lights
     @MainActor
     func testFloatingPanelClassTraits() {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 320))
@@ -350,9 +351,34 @@ final class BlipDropletTests: XCTestCase {
         XCTAssertTrue(panel.canBecomeMain, "Floating panel must be able to become main")
         XCTAssertEqual(panel.level, .floating, "Floating panel must be at .floating level")
         XCTAssertTrue(panel.isFloatingPanel)
+        XCTAssertFalse(panel.isMovableByWindowBackground, "Window background should not be draggable directly")
+
+        // Standard traffic light buttons verification
+        XCTAssertNotNil(panel.standardWindowButton(.closeButton), "Close button must be configured")
+        XCTAssertNotNil(panel.standardWindowButton(.miniaturizeButton), "Miniaturize button must be configured")
+        XCTAssertNotNil(panel.standardWindowButton(.zoomButton), "Zoom button must be configured")
 
         // Test Escape key dismissal simulation
         panel.cancelOperation(nil)
         XCTAssertTrue(closed, "cancelOperation must invoke onClose handler")
+    }
+
+    // 15. Panel Controller Zoom and Position Reset
+    @MainActor
+    func testPanelZoomToggleAndResetPosition() {
+        let controller = BlipPanelController.shared
+        let initialZoom = controller.isZoomed
+
+        // Test zoom toggle
+        controller.toggleZoom()
+        XCTAssertNotEqual(controller.isZoomed, initialZoom, "toggleZoom should flip zoom state")
+
+        controller.toggleZoom()
+        XCTAssertEqual(controller.isZoomed, initialZoom, "Second toggleZoom should return to original state")
+
+        // Test resetPosition
+        controller.resetPosition()
+        let defaultOrigin = controller.computeDefaultOrigin(for: CGSize(width: 380, height: 320))
+        XCTAssertGreaterThan(defaultOrigin.y, 0)
     }
 }

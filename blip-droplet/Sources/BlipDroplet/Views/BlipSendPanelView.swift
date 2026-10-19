@@ -3,7 +3,8 @@
 //  BlipDroplet
 //
 //  Premium native macOS floating send panel for Blip.
-//  Rendered on DroppyPanelSurface, accepts drops and launches native file selection.
+//  Features native traffic lights, draggable title bar, rich dark appearance,
+//  file drop target, and native file picker integration.
 //
 
 import SwiftUI
@@ -27,66 +28,96 @@ public struct BlipSendPanelView: View {
     public var body: some View {
         VStack(spacing: 0) {
             headerRow
-                .padding(.horizontal, DroppySpacing.md)
-                .padding(.top, DroppySpacing.md)
-                .padding(.bottom, DroppySpacing.sm)
 
             Divider()
-                .opacity(0.3)
+                .opacity(0.25)
 
             mainContent
                 .padding(DroppySpacing.md)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             Divider()
-                .opacity(0.3)
+                .opacity(0.25)
 
             footerRow
                 .padding(.horizontal, DroppySpacing.md)
                 .padding(.vertical, DroppySpacing.sm)
         }
-        .frame(width: 380, height: 320)
-        .background(DroppyPanelSurface(cornerRadius: 24))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(AdaptiveColors.subtleBorderAuto, lineWidth: 1)
+        .frame(
+            width: controller.isZoomed ? 440 : 380,
+            height: controller.isZoomed ? 400 : 320
         )
+        .background(
+            ZStack {
+                // Deep dark base material for excellent contrast on any wallpaper
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color(nsColor: .windowBackgroundColor).opacity(0.92))
+                    .background(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(.ultraDarkMaterial)
+                    )
+
+                // Droppy native glass surface for sheen and host theme harmony
+                DroppyPanelSurface(cornerRadius: 24)
+                    .opacity(0.70)
+
+                // Crisp hairline border
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .animation(.easeInOut(duration: 0.22), value: controller.isZoomed)
     }
 
-    // MARK: - Header
+    // MARK: - Header (with Traffic Light clearance & Draggable background)
 
     private var headerRow: some View {
         HStack(spacing: DroppySpacing.sm) {
-            ZStack {
-                Circle()
-                    .fill(electricBlue.opacity(0.18))
-                    .frame(width: 28, height: 28)
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(electricBlue)
-            }
+            // Draggable leading region: clearance for traffic lights + icon badge + title + flex spacer
+            HStack(spacing: DroppySpacing.sm) {
+                // Clearance for top-left native AppKit traffic lights (Red, Yellow, Green)
+                Spacer()
+                    .frame(width: 58)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Blip")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(AdaptiveColors.notchSurfacePrimaryText)
-                Text("Send to your Android device")
-                    .font(.system(size: 10, weight: .regular))
+                // Blip icon badge
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(electricBlue.opacity(0.18))
+                        .frame(width: 28, height: 28)
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(electricBlue)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Blip")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(AdaptiveColors.notchSurfacePrimaryText)
+                    Text("Send to your Android device")
+                        .font(.system(size: 11))
+                        .foregroundColor(AdaptiveColors.notchSurfaceSecondaryText)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+            .background(DraggableHeaderArea())
+
+            // Reset Position button (smoothly returns panel below the notch)
+            Button {
+                controller.resetPosition()
+            } label: {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundColor(AdaptiveColors.notchSurfaceSecondaryText)
             }
-
-            Spacer(minLength: 0)
-
-            Button {
-                controller.closePanel()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-            }
-            .buttonStyle(DroppyCircleButtonStyle(size: 22))
-            .help("Close panel (Esc)")
+            .buttonStyle(DroppyQuietButtonStyle(size: .small))
+            .help("Reset position below notch")
         }
+        .padding(.horizontal, DroppySpacing.md)
+        .padding(.top, 14)
+        .padding(.bottom, DroppySpacing.sm)
     }
 
     // MARK: - Main Content
@@ -119,11 +150,11 @@ public struct BlipSendPanelView: View {
     private var emptyDropAndChooseView: some View {
         ZStack {
             RoundedRectangle(cornerRadius: DroppyRadius.medium, style: .continuous)
-                .fill(isTargeted ? electricBlue.opacity(0.12) : AdaptiveColors.buttonBackgroundAuto)
+                .fill(isTargeted ? electricBlue.opacity(0.14) : Color(nsColor: .controlBackgroundColor).opacity(0.65))
                 .overlay(
                     RoundedRectangle(cornerRadius: DroppyRadius.medium, style: .continuous)
                         .strokeBorder(
-                            isTargeted ? electricBlue : AdaptiveColors.subtleBorderAuto,
+                            isTargeted ? electricBlue : Color.white.opacity(0.10),
                             style: StrokeStyle(lineWidth: isTargeted ? 1.5 : 1, dash: isTargeted ? [] : [5, 5])
                         )
                 )
@@ -216,7 +247,11 @@ public struct BlipSendPanelView: View {
             .padding(DroppySpacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: DroppyRadius.medium, style: .continuous)
-                    .fill(AdaptiveColors.buttonBackgroundAuto)
+                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.65))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DroppyRadius.medium, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    )
             )
 
             // Status chip
@@ -231,28 +266,42 @@ public struct BlipSendPanelView: View {
 
             Spacer(minLength: 0)
 
-            // Actions row
-            HStack(spacing: DroppySpacing.sm) {
-                Button("Change File") {
-                    model.clearStaging()
-                }
-                .buttonStyle(DroppyQuietButtonStyle(size: .small))
-
-                Spacer(minLength: 0)
-
-                Button {
-                    droplet.requestHandoff()
-                } label: {
-                    HStack(spacing: 4) {
-                        Text("Continue in Blip")
-                        Image(systemName: "arrow.up.forward.app")
-                            .font(.system(size: 10))
+            // Actions row with truthful safety explanatory message
+            VStack(alignment: .leading, spacing: DroppySpacing.xs) {
+                HStack(spacing: DroppySpacing.sm) {
+                    Button("Change File") {
+                        model.clearStaging()
                     }
+                    .buttonStyle(DroppyQuietButtonStyle(size: .small))
+
+                    Spacer(minLength: 0)
+
+                    Button {
+                        droplet.requestHandoff()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("Continue in Blip")
+                            Image(systemName: "arrow.up.forward.app")
+                                .font(.system(size: 10))
+                        }
+                    }
+                    .buttonStyle(DroppyQuietButtonStyle(size: .small))
+                    .foregroundColor(BlipServicesAdapter.isDispatchCompiledIn ? electricBlue : AdaptiveColors.notchSurfaceTertiaryText)
+                    .disabled(!BlipServicesAdapter.isDispatchCompiledIn)
+                    .help(BlipServicesAdapter.isDispatchCompiledIn ? "Hand off to official Blip" : "Services dispatch compiled out in Phase 3 safety build")
                 }
-                .buttonStyle(DroppyQuietButtonStyle(size: .small))
-                .foregroundColor(BlipServicesAdapter.isDispatchCompiledIn ? electricBlue : AdaptiveColors.notchSurfaceTertiaryText)
-                .disabled(!BlipServicesAdapter.isDispatchCompiledIn)
-                .help(BlipServicesAdapter.isDispatchCompiledIn ? "Hand off to official Blip" : "Services dispatch compiled out in Phase 3 safety build")
+
+                // Truthful explanatory message required by Phase 3E
+                HStack(spacing: 4) {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 10))
+                        .foregroundColor(AdaptiveColors.notchSurfaceTertiaryText)
+                    Text("File staged locally. Sending is not enabled in this test build.")
+                        .font(.system(size: 10))
+                        .foregroundColor(AdaptiveColors.notchSurfaceSecondaryText)
+                        .lineLimit(2)
+                }
+                .padding(.top, 2)
             }
         }
     }
@@ -279,7 +328,7 @@ public struct BlipSendPanelView: View {
                 .foregroundColor(.green)
                 .font(.system(size: 28))
 
-            Text("Services handoff accepted")
+            Text("Handed Off to Blip")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(AdaptiveColors.notchSurfacePrimaryText)
 
