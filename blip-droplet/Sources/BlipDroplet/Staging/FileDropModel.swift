@@ -33,9 +33,6 @@ public final class FileDropModel: ObservableObject {
         self.storage = storage
     }
 
-    isolated deinit {
-        cleanup()
-    }
 
     public func cleanup() {
         if let url = activeSecurityScopeURL {

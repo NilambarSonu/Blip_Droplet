@@ -194,12 +194,19 @@ final class BlipDropletTests: XCTestCase {
         let descriptors = droplet.widgetDescriptors
         XCTAssertEqual(descriptors.count, 1)
 
-        let desc = descriptors[0]
-        XCTAssertEqual(desc.id, "blip-shelf")
+        guard let desc = descriptors.first else {
+            XCTFail("Missing widget descriptor")
+            return
+        }
+        XCTAssertEqual(desc.id.rawValue, "blip-shelf")
         XCTAssertEqual(desc.title, "Blip")
-        XCTAssertEqual(desc.layoutTraits.preferredSoloWidth, 420)
-        XCTAssertEqual(desc.layoutTraits.preferredPairedWidth, 210)
-        XCTAssertEqual(desc.layoutTraits.contentHeight, .fixed(150))
+        XCTAssertEqual(desc.layoutTraits.preferredSoloWidth, CGFloat(420))
+        XCTAssertEqual(desc.layoutTraits.preferredPairedWidth, CGFloat(210))
+        if case .fixed(let height) = desc.layoutTraits.contentHeight {
+            XCTAssertEqual(height, CGFloat(150))
+        } else {
+            XCTFail("Expected fixed content height of 150")
+        }
     }
 
     // 9. Native File Picker Staging
