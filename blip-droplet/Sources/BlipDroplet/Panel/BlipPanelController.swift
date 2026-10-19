@@ -204,8 +204,8 @@ public final class BlipPanelController: NSObject, ObservableObject, NSWindowDele
     }
 
     public func toggleZoom() {
-        guard let panel = panel else { return }
         isZoomed.toggle()
+        guard let panel = panel else { return }
         let targetSize = isZoomed ? CGSize(width: 440, height: 400) : CGSize(width: 380, height: 320)
         let currentOrigin = panel.frame.origin
         // Expand downwards and outward symmetrically
@@ -217,9 +217,9 @@ public final class BlipPanelController: NSObject, ObservableObject, NSWindowDele
     }
 
     public func resetPosition() {
-        guard let panel = panel else { return }
         savedOrigin = nil
         UserDefaults.standard.removeObject(forKey: "BlipDroplet.PanelOrigin")
+        guard let panel = panel else { return }
         let targetSize = isZoomed ? CGSize(width: 440, height: 400) : CGSize(width: 380, height: 320)
         let defaultOrigin = computeDefaultOrigin(for: targetSize)
         panel.setFrame(NSRect(origin: defaultOrigin, size: targetSize), display: true, animate: true)
