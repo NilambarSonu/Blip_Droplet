@@ -20,18 +20,23 @@ final class BlipDropletTests: XCTestCase {
         tempDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("blip_unit_test_\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
         storage = FileStagingStorage(customBaseURL: tempDirectory)
-        dropModel = FileDropModel(storage: storage)
+        MainActor.assumeIsolated {
+            dropModel = FileDropModel(storage: storage)
+        }
     }
 
     override func tearDown() {
-        dropModel.cleanup()
+        MainActor.assumeIsolated {
+            dropModel.cleanup()
+        }
         try? FileManager.default.removeItem(at: tempDirectory)
         super.tearDown()
     }
 
     // Helper to pump RunLoop until condition met
+    @MainActor
     @discardableResult
-    private func wait(timeout: TimeInterval = 3.0, until condition: () -> Bool) -> Bool {
+    private func wait(timeout: TimeInterval = 3.0, until condition: @MainActor () -> Bool) -> Bool {
         let start = Date()
         while !condition() && Date().timeIntervalSince(start) < timeout {
             RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
@@ -40,12 +45,14 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 1. Empty State
+    @MainActor
     func testInitialEmptyState() {
         XCTAssertEqual(dropModel.state, .empty)
         XCTAssertFalse(dropModel.isTargeted)
     }
 
     // 2. Valid Staged File
+    @MainActor
     func testValidFileDropAndStaging() throws {
         let fixtureURL = tempDirectory.appendingPathComponent("test_doc.txt")
         let fixtureData = "Phase 3A DroppyKit Synthetic Test Payload".data(using: .utf8)!
@@ -71,6 +78,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 3. Duplicate Drop Prevention
+    @MainActor
     func testDuplicateDropRejection() throws {
         let fixtureURL = tempDirectory.appendingPathComponent("test_doc.txt")
         try "payload".write(to: fixtureURL, atomically: true, encoding: .utf8)
@@ -96,6 +104,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 4. Symlink Rejection
+    @MainActor
     func testSymlinkRejection() throws {
         let targetURL = tempDirectory.appendingPathComponent("real_target.txt")
         try "real data".write(to: targetURL, atomically: true, encoding: .utf8)
@@ -115,6 +124,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 5. Directory Drop Rejection
+    @MainActor
     func testDirectoryRejection() throws {
         let folderURL = tempDirectory.appendingPathComponent("subfolder")
         try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
@@ -131,6 +141,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 6. Clear Staging Cleanup
+    @MainActor
     func testClearStaging() throws {
         let fixtureURL = tempDirectory.appendingPathComponent("clear_test.txt")
         try "test".write(to: fixtureURL, atomically: true, encoding: .utf8)
@@ -156,6 +167,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 7. Services Adapter Phase 3A Safety Gate
+    @MainActor
     func testServicesAdapterDispatchSafety() {
         XCTAssertFalse(BlipServicesAdapter.isDispatchCompiledIn, "Dispatch MUST be compiled out in Phase 3A")
 
@@ -176,6 +188,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 8. Droplet Widget Descriptor Compliance
+    @MainActor
     func testWidgetDescriptorTraits() {
         let droplet = BlipDroplet()
         let descriptors = droplet.widgetDescriptors
@@ -190,6 +203,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 9. Native File Picker Staging
+    @MainActor
     func testNativeFilePickerStaging() throws {
         let fixtureURL = tempDirectory.appendingPathComponent("picker_doc.pdf")
         let fixtureData = "Phase 3D Native File Picker Staged Data".data(using: .utf8)!
@@ -213,6 +227,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 10. File Picker and Drag-and-Drop Staging Parity
+    @MainActor
     func testFilePickerAndDropValidationParity() throws {
         let fixtureURL = tempDirectory.appendingPathComponent("parity_doc.bin")
         let testBytes: [UInt8] = (0..<1024).map { UInt8($0 % 256) }
@@ -255,6 +270,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 11. File Picker Rejection on Duplicate File
+    @MainActor
     func testFilePickerDuplicateRejection() throws {
         let fixtureURL = tempDirectory.appendingPathComponent("first.txt")
         try "first file".write(to: fixtureURL, atomically: true, encoding: .utf8)
@@ -278,6 +294,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 12. File Picker Symlink and Directory Rejections
+    @MainActor
     func testFilePickerSymlinkAndDirectoryRejections() throws {
         let realFile = tempDirectory.appendingPathComponent("target_file.txt")
         try "data".write(to: realFile, atomically: true, encoding: .utf8)
@@ -306,6 +323,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 13. Panel Controller Initial State
+    @MainActor
     func testPanelControllerInitialState() {
         let controller = BlipPanelController.shared
         XCTAssertFalse(controller.isOpen)
@@ -313,6 +331,7 @@ final class BlipDropletTests: XCTestCase {
     }
 
     // 14. Floating Panel Class Traits
+    @MainActor
     func testFloatingPanelClassTraits() {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 320))
         var closed = false

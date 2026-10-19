@@ -228,8 +228,8 @@ public final class FileDropModel: ObservableObject {
             let finalFailure = failureReason
             let finalCoordError = coordError
 
-            await MainActor.run {
-                guard let self = self else {
+            await MainActor.run { [weak self] in
+                guard let self else {
                     if let info = finalInfo {
                         storage.removeStagedFile(at: info.stagedURL)
                     }
