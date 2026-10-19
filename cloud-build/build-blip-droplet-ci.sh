@@ -42,6 +42,8 @@ cd "$PACKAGE_DIR"
 bash "$SDK_DIR/Scripts/validate-droplet.sh" --no-submission | tee "$EVIDENCE_DIR/manifest_validation.txt"
 
 echo "=== 3. Building Universal .droplet Bundle ==="
+# Un-silence build-droplet.sh so compiler and linker diagnostics appear in CI
+sed -i '' 's/>\/dev\/null//g' "$SDK_DIR/Scripts/build-droplet.sh"
 bash "$SDK_DIR/Scripts/build-droplet.sh" --arch universal 2>&1 | tee "$EVIDENCE_DIR/build.log"
 
 BUNDLE_PATH="$(find "$PACKAGE_DIR/.build" -maxdepth 1 -name '*.droplet' | head -1)"
