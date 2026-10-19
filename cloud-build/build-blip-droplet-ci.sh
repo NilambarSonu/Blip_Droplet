@@ -42,8 +42,19 @@ cd "$PACKAGE_DIR"
 bash "$SDK_DIR/Scripts/validate-droplet.sh" --no-submission | tee "$EVIDENCE_DIR/manifest_validation.txt"
 
 echo "=== 3. Building Universal .droplet Bundle ==="
-# Un-silence build-droplet.sh so compiler and linker diagnostics appear in CI
-sed -i '' 's/>\/dev\/null//g' "$SDK_DIR/Scripts/build-droplet.sh"
+# Un-silence swift build in build-droplet.sh so diagnostics appear in CI without corrupting 2>/dev/null
+/usr/bin/python3 -c '
+import sys
+path = sys.argv[1]
+with open(path) as f:
+    c = f.read()
+target = "        -Xswiftc -enable-library-evolution \\\n        >/dev/null\n"
+replacement = "        -Xswiftc -enable-library-evolution\n"
+if target in c:
+    with open(path, "w") as f:
+        f.write(c.replace(target, replacement))
+    print("Un-muted swift build in build-droplet.sh")
+' "$SDK_DIR/Scripts/build-droplet.sh"
 bash "$SDK_DIR/Scripts/build-droplet.sh" --arch universal 2>&1 | tee "$EVIDENCE_DIR/build.log"
 
 BUNDLE_PATH="$(find "$PACKAGE_DIR/.build" -maxdepth 1 -name '*.droplet' | head -1)"
